@@ -7,13 +7,16 @@ export default auth((req) => {
 
   const isAuthPage = pathname.startsWith("/login");
   const isApiAuth = pathname.startsWith("/api/auth");
+  const isPublicPage =
+    pathname.startsWith("/privacy") ||
+    pathname.startsWith("/terms");
   const isPublicStatic =
     pathname.startsWith("/_next") ||
     pathname.startsWith("/icons") ||
     pathname.startsWith("/manifest") ||
     pathname === "/favicon.ico";
 
-  if (isApiAuth || isPublicStatic) {
+  if (isApiAuth || isPublicStatic || isPublicPage) {
     return NextResponse.next();
   }
 

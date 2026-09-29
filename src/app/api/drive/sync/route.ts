@@ -3,12 +3,18 @@ import { auth } from "@/auth";
 import { GoogleDriveServerClient } from "@/lib/drive/server-client";
 import { DriveMetaFile, DriveMonthFile } from "@/types/drive";
 import { mergeTransactions, mergeCategories } from "@/lib/drive/merge";
+import { classifyDriveError } from "@/lib/drive/error-helper";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.accessToken) {
     return NextResponse.json(
-      { error: "Unauthorized or missing Google access token" },
+      {
+        error: "Phiên đăng nhập Google đã hết hạn hoặc chưa cấp quyền. Vui lòng đăng nhập lại.",
+        code: "AUTH_EXPIRED",
+        detail: "Session missing accessToken",
+        actionType: "relogin",
+      },
       { status: 401 }
     );
   }
@@ -57,9 +63,18 @@ export async function GET(req: NextRequest) {
       remoteMonths,
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("Drive sync GET error:", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    const classified = classifyDriveError(err);
+    console.error("Drive sync GET error:", classified.detail);
+    return NextResponse.json(
+      {
+        error: classified.userMessage,
+        code: classified.code,
+        detail: classified.detail,
+        actionUrl: classified.actionUrl,
+        actionType: classified.actionType,
+      },
+      { status: classified.code === "AUTH_EXPIRED" ? 401 : 500 }
+    );
   }
 }
 
@@ -67,7 +82,12 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.accessToken) {
     return NextResponse.json(
-      { error: "Unauthorized or missing Google access token" },
+      {
+        error: "Phiên đăng nhập Google đã hết hạn hoặc chưa cấp quyền. Vui lòng đăng nhập lại.",
+        code: "AUTH_EXPIRED",
+        detail: "Session missing accessToken",
+        actionType: "relogin",
+      },
       { status: 401 }
     );
   }
@@ -146,8 +166,17 @@ export async function POST(req: NextRequest) {
       syncedAt: new Date().toISOString(),
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("Drive sync POST error:", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    const classified = classifyDriveError(err);
+    console.error("Drive sync POST error:", classified.detail);
+    return NextResponse.json(
+      {
+        error: classified.userMessage,
+        code: classified.code,
+        detail: classified.detail,
+        actionUrl: classified.actionUrl,
+        actionType: classified.actionType,
+      },
+      { status: classified.code === "AUTH_EXPIRED" ? 401 : 500 }
+    );
   }
 }

@@ -28,6 +28,8 @@ import {
   Sun,
   Laptop,
   AlertTriangle,
+  AlertCircle,
+  ExternalLink,
   PiggyBank,
   Calendar,
   Save,
@@ -126,14 +128,30 @@ export default function SettingsPage() {
 
   const handleManualSync = async () => {
     toast({ title: "Đang đồng bộ dữ liệu...", type: "info" });
-    await syncEngine.performSync();
-    toast({ title: "Hoàn tất đồng bộ với Google Drive", type: "success" });
+    const res = await syncEngine.performSync();
+    if (res.success) {
+      toast({ title: "Hoàn tất đồng bộ với Google Drive", type: "success" });
+    } else {
+      toast({
+        title: "Đồng bộ không thành công",
+        description: res.message || "Vui lòng xem chi tiết bên dưới",
+        type: "error",
+      });
+    }
   };
 
   const handleForcePull = async () => {
     toast({ title: "Đang tải dữ liệu từ Google Drive...", type: "info" });
-    await syncEngine.performSync({ forcePull: true });
-    toast({ title: "Đã tải toàn bộ dữ liệu từ Drive về máy", type: "success" });
+    const res = await syncEngine.performSync({ forcePull: true });
+    if (res.success) {
+      toast({ title: "Đã tải toàn bộ dữ liệu từ Drive về máy", type: "success" });
+    } else {
+      toast({
+        title: "Tải từ Drive không thành công",
+        description: res.message || "Vui lòng xem chi tiết bên dưới",
+        type: "error",
+      });
+    }
   };
 
   const handleExportCSV = () => {
@@ -203,7 +221,16 @@ export default function SettingsPage() {
               <HardDrive className="w-4 h-4 text-emerald-600" />
               Đồng Bộ Google Drive AppData
             </CardTitle>
-            <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full font-medium">
+            <span
+              className={cn(
+                "text-[10px] font-mono px-2 py-0.5 rounded-full font-medium truncate max-w-[200px]",
+                syncStatus.state === "error"
+                  ? "text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 font-semibold"
+                  : syncStatus.state === "syncing"
+                  ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60"
+                  : "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60"
+              )}
+            >
               {syncStatus.message || "Sẵn sàng"}
             </span>
           </div>
@@ -212,6 +239,40 @@ export default function SettingsPage() {
           <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
             Dữ liệu tự động đồng bộ lên thư mục `appDataFolder` riêng tư trên Google Drive của bạn. Chỉ có bạn mới có quyền truy cập.
           </p>
+
+          {syncStatus.state === "error" && (
+            <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 space-y-2">
+              <div className="flex items-start gap-2 text-rose-700 dark:text-rose-400 font-semibold text-xs">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div>
+                  <p>{syncStatus.message || "Gặp sự cố khi kết nối Drive"}</p>
+                </div>
+              </div>
+
+              {syncStatus.errorCode === "DRIVE_API_NOT_ENABLED" && (
+                <div className="space-y-1.5 pt-1 text-[11px] text-slate-600 dark:text-slate-300">
+                  <p className="leading-snug">
+                    Dự án Google Cloud của bạn chưa bật <strong>Google Drive API</strong>.
+                  </p>
+                  <a
+                    href={syncStatus.actionUrl || "https://console.cloud.google.com/apis/library/drive.googleapis.com"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 py-1.5 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-[11px] shadow-sm transition-colors mt-1"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Mở Google Cloud Console để Bật Drive API
+                  </a>
+                </div>
+              )}
+
+              {syncStatus.errorDetail && (
+                <pre className="p-2 rounded-lg bg-white/80 dark:bg-black/40 text-[9px] font-mono text-slate-600 dark:text-slate-400 overflow-x-auto whitespace-pre-wrap max-h-20">
+                  {syncStatus.errorDetail}
+                </pre>
+              )}
+            </div>
+          )}
 
           {syncStatus.lastSyncedAt && (
             <p className="text-[10px] text-slate-400">

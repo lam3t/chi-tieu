@@ -78,13 +78,25 @@ class DriveSyncEngine {
   /**
    * Main sync workflow
    */
-  public async performSync(options: { forcePull?: boolean } = {}) {
-    if (typeof window === "undefined") return;
-    if (this.isSyncing) return;
+  public async performSync(
+    options: { forcePull?: boolean } = {}
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    code?: string;
+    detail?: string;
+    actionUrl?: string;
+  }> {
+    if (typeof window === "undefined") {
+      return { success: false, message: "Môi trường không hỗ trợ" };
+    }
+    if (this.isSyncing) {
+      return { success: false, message: "Đang trong tiến trình đồng bộ" };
+    }
 
     if (!navigator.onLine) {
       this.updateStatus({ state: "offline", message: "Ngoại tuyến" });
-      return;
+      return { success: false, message: "Thiết bị đang ngoại tuyến" };
     }
 
     this.isSyncing = true;
@@ -96,49 +108,58 @@ class DriveSyncEngine {
 
       if (isFirstRun) {
         const pullRes = await fetch("/api/drive/sync?pull=true");
-        if (pullRes.status === 401) {
+        if (!pullRes.ok) {
+          const errData = await pullRes.json().catch(() => ({}));
+          const errMsg = errData.error || `Lỗi đồng bộ (${pullRes.status})`;
           this.updateStatus({
             state: "error",
-            message: "Cần đăng nhập Google",
+            message: errMsg,
+            errorCode: errData.code || (pullRes.status === 401 ? "AUTH_EXPIRED" : "UNKNOWN_ERROR"),
+            errorDetail: errData.detail || errMsg,
+            actionUrl: errData.actionUrl,
           });
           this.isSyncing = false;
-          return;
+          return {
+            success: false,
+            message: errMsg,
+            code: errData.code,
+            detail: errData.detail,
+            actionUrl: errData.actionUrl,
+          };
         }
 
-        if (pullRes.ok) {
-          const data = await pullRes.json();
-          const { remoteMeta, remoteMonths, files } = data;
+        const data = await pullRes.json();
+        const { remoteMeta, remoteMonths, files } = data;
 
-          if (remoteMeta) {
-            // Restore categories from Drive
-            if (remoteMeta.categories && remoteMeta.categories.length > 0) {
-              await db.categories.bulkPut(remoteMeta.categories);
-            }
-            // Restore settings
-            if (remoteMeta.settings) {
-              await db.settings.put({
-                key: "app_settings",
-                value: remoteMeta.settings,
-              });
-            }
+        if (remoteMeta) {
+          // Restore categories from Drive
+          if (remoteMeta.categories && remoteMeta.categories.length > 0) {
+            await db.categories.bulkPut(remoteMeta.categories);
           }
-
-          if (remoteMonths && Array.isArray(remoteMonths)) {
-            for (const rm of remoteMonths) {
-              if (rm.transactions && rm.transactions.length > 0) {
-                await db.transactions.bulkPut(rm.transactions);
-              }
-            }
+          // Restore settings
+          if (remoteMeta.settings) {
+            await db.settings.put({
+              key: "app_settings",
+              value: remoteMeta.settings,
+            });
           }
-
-          // If no meta.json existed on Drive, enqueue meta sync to upload local seeds
-          const hasMeta = files && files.some((f: { name: string }) => f.name === "meta.json");
-          if (!hasMeta) {
-            await db.enqueueSyncJob("meta");
-          }
-
-          this.hasInitialized = true;
         }
+
+        if (remoteMonths && Array.isArray(remoteMonths)) {
+          for (const rm of remoteMonths) {
+            if (rm.transactions && rm.transactions.length > 0) {
+              await db.transactions.bulkPut(rm.transactions);
+            }
+          }
+        }
+
+        // If no meta.json existed on Drive, enqueue meta sync to upload local seeds
+        const hasMeta = files && files.some((f: { name: string }) => f.name === "meta.json");
+        if (!hasMeta) {
+          await db.enqueueSyncJob("meta");
+        }
+
+        this.hasInitialized = true;
       }
 
       // 2. Process pending sync queue
@@ -192,7 +213,23 @@ class DriveSyncEngine {
           });
 
           if (!pushRes.ok) {
-            throw new Error(`Sync server responded with ${pushRes.status}`);
+            const errData = await pushRes.json().catch(() => ({}));
+            const errMsg = errData.error || `Lỗi tải lên (${pushRes.status})`;
+            this.updateStatus({
+              state: "error",
+              message: errMsg,
+              errorCode: errData.code || "UNKNOWN_ERROR",
+              errorDetail: errData.detail || errMsg,
+              actionUrl: errData.actionUrl,
+            });
+            this.isSyncing = false;
+            return {
+              success: false,
+              message: errMsg,
+              code: errData.code,
+              detail: errData.detail,
+              actionUrl: errData.actionUrl,
+            };
           }
 
           const pushData = await pushRes.json();
@@ -218,14 +255,25 @@ class DriveSyncEngine {
         state: "synced",
         lastSyncedAt: new Date(),
         message: "Đã đồng bộ với Drive",
+        errorCode: undefined,
+        errorDetail: undefined,
+        actionUrl: undefined,
       });
+      return { success: true, message: "Đã đồng bộ thành công với Drive" };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.warn("[DriveSyncEngine] Sync error:", message);
       this.updateStatus({
         state: "error",
-        message: "Lỗi đồng bộ - Thử lại",
+        message: "Lỗi kết nối khi đồng bộ Drive",
+        errorCode: "NETWORK_ERROR",
+        errorDetail: message,
       });
+      return {
+        success: false,
+        message: "Lỗi kết nối khi đồng bộ Drive",
+        detail: message,
+      };
     } finally {
       this.isSyncing = false;
     }

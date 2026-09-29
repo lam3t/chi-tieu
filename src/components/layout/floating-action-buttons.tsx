@@ -132,7 +132,7 @@ export function FloatingActionButtons() {
         onChange={handleFilesSelected}
       />
 
-      <div className="fixed bottom-20 right-4 z-40 flex items-center gap-2.5">
+      <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom,0px)+1rem)] right-4 z-50 flex items-center gap-2.5">
         {/* Camera OCR Button */}
         <button
           onClick={handleCameraClick}

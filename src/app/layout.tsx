@@ -38,7 +38,10 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#059669",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#020617" },
+  ],
 };
 
 export default function RootLayout({
@@ -58,7 +61,7 @@ export default function RootLayout({
                 <ToastProvider>
                   <PwaRegister />
                   <AppHeader />
-                  <main className="flex-1 max-w-md w-full mx-auto pb-24 px-4 pt-3">
+                  <main className="flex-1 max-w-md w-full mx-auto pb-32 px-4 pt-3">
                     {children}
                   </main>
                   <FloatingActionButtons />

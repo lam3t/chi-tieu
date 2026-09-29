@@ -171,6 +171,33 @@ export class PersonalFinanceDB extends Dexie {
       .slice(0, limit)
       .map(([id]) => id);
   }
+
+  async getCategoryFrequentAmounts(categoryId: string, limit = 4): Promise<number[]> {
+    try {
+      const txs = await this.transactions
+        .where("categoryId")
+        .equals(categoryId)
+        .filter((t) => !t.deletedAt)
+        .limit(50)
+        .toArray();
+
+      if (txs.length === 0) return [];
+
+      const freq: Record<number, number> = {};
+      for (const t of txs) {
+        if (t.amount > 0) {
+          freq[t.amount] = (freq[t.amount] || 0) + 1;
+        }
+      }
+
+      return Object.entries(freq)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, limit)
+        .map(([amt]) => parseInt(amt, 10));
+    } catch {
+      return [];
+    }
+  }
 }
 
 export const db = new PersonalFinanceDB();

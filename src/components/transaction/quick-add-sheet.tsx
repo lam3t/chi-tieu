@@ -14,7 +14,9 @@ import {
   Delete,
   Check,
   Trash2,
+  Sparkles,
 } from "lucide-react";
+import { getSmartAmountSuggestions } from "@/lib/analytics/smart-amount";
 
 interface QuickAddSheetProps {
   isOpen: boolean;
@@ -62,6 +64,21 @@ export function QuickAddSheet({
       return 0;
     });
   }, [categories, type, mostUsedCatIds]);
+
+  // Fetch frequent amounts for selected category
+  const [frequentCategoryAmounts, setFrequentCategoryAmounts] = React.useState<number[]>([]);
+  React.useEffect(() => {
+    if (selectedCategoryId) {
+      db.getCategoryFrequentAmounts(selectedCategoryId, 4)
+        .then(setFrequentCategoryAmounts)
+        .catch(() => {});
+    }
+  }, [selectedCategoryId]);
+
+  // Compute smart amount suggestions
+  const smartSuggestions = React.useMemo(() => {
+    return getSmartAmountSuggestions(amountStr, frequentCategoryAmounts, type);
+  }, [amountStr, frequentCategoryAmounts, type]);
 
   // Sync state when editing or opening
   React.useEffect(() => {
@@ -277,6 +294,43 @@ export function QuickAddSheet({
             {formatVND(currentAmount)}
           </div>
         </div>
+
+        {/* Smart Amount Suggestions */}
+        {smartSuggestions.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-2 pt-0.5 px-0.5">
+            <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 shrink-0 pr-0.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Gợi ý:</span>
+            </div>
+            {smartSuggestions.map((s) => (
+              <button
+                key={`${s.label}-${s.amount}`}
+                type="button"
+                onClick={() => setAmountStr(s.amount.toString())}
+                className={cn(
+                  "flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition-all shrink-0 active:scale-95 shadow-2xs",
+                  s.primary
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-600/20"
+                    : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/60 dark:border-slate-700/60"
+                )}
+              >
+                <span>{s.label}</span>
+                {s.badge && (
+                  <span
+                    className={cn(
+                      "text-[9px] px-1 py-0.2 rounded-md font-normal",
+                      s.primary
+                        ? "bg-white/20 text-white"
+                        : "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
+                    )}
+                  >
+                    {s.badge}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Horizontally scrollable Category Chips */}
         <div className="mb-2">

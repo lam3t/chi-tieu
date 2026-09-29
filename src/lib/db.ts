@@ -24,23 +24,38 @@ export class PersonalFinanceDB extends Dexie {
     });
   }
 
-  async initSeed() {
-    // Seed categories if empty
-    const catCount = await this.categories.count();
-    if (catCount === 0) {
-      await this.categories.bulkAdd(DEFAULT_CATEGORIES);
+  async ensureOpen() {
+    if (!this.isOpen()) {
+      try {
+        await this.open();
+      } catch (err) {
+        console.warn("Retrying open ChiTieuDB:", err);
+      }
     }
+  }
 
-    // Seed settings if empty
-    const settingsRec = await this.settings.get("app_settings");
-    if (!settingsRec) {
-      await this.settings.put({
-        key: "app_settings",
-        value: {
-          ...DEFAULT_SETTINGS,
-          updatedAt: new Date().toISOString(),
-        },
-      });
+  async initSeed() {
+    try {
+      await this.ensureOpen();
+      // Seed categories if empty
+      const catCount = await this.categories.count();
+      if (catCount === 0) {
+        await this.categories.bulkAdd(DEFAULT_CATEGORIES);
+      }
+
+      // Seed settings if empty
+      const settingsRec = await this.settings.get("app_settings");
+      if (!settingsRec) {
+        await this.settings.put({
+          key: "app_settings",
+          value: {
+            ...DEFAULT_SETTINGS,
+            updatedAt: new Date().toISOString(),
+          },
+        });
+      }
+    } catch (err) {
+      console.warn("Dexie initSeed error:", err);
     }
   }
 

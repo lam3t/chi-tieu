@@ -39,9 +39,19 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
 
-  // Load settings from Dexie
+  // Load settings from Dexie with localStorage fallback
   const settingsRec = useLiveQuery(() => db.settings.get("app_settings"), []);
-  const settings: Settings = settingsRec?.value || DEFAULT_SETTINGS;
+  const [localSettings, setLocalSettings] = React.useState<Settings>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("app_settings");
+        if (raw) return JSON.parse(raw);
+      } catch {}
+    }
+    return DEFAULT_SETTINGS;
+  });
+
+  const settings: Settings = settingsRec?.value || localSettings || DEFAULT_SETTINGS;
 
   const transactions = useLiveQuery(() => db.transactions.toArray(), []);
   const categories = useLiveQuery(() => db.categories.toArray(), []);
@@ -65,7 +75,7 @@ export default function SettingsPage() {
       setEmergencyTarget((settings.emergencyFundTarget || 50000000).toString());
       setSaveReceipts(settings.saveReceiptImages || false);
     }
-  }, [settingsRec]);
+  }, [settingsRec, localSettings]);
 
   React.useEffect(() => {
     return syncEngine.subscribe((newStatus) => {
@@ -74,15 +84,25 @@ export default function SettingsPage() {
   }, []);
 
   const handleSaveSettings = async () => {
-    try {
-      const updated: Settings = {
-        ...settings,
-        monthStartDay: Math.min(28, Math.max(1, monthStartDay)),
-        emergencyFundTarget: parseInt(emergencyTarget, 10) || 0,
-        saveReceiptImages: saveReceipts,
-        updatedAt: new Date().toISOString(),
-      };
+    const updated: Settings = {
+      ...settings,
+      monthStartDay: Math.min(28, Math.max(1, monthStartDay)),
+      emergencyFundTarget: parseInt(emergencyTarget, 10) || 0,
+      saveReceiptImages: saveReceipts,
+      updatedAt: new Date().toISOString(),
+    };
 
+    setLocalSettings(updated);
+
+    // Save to localStorage
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("app_settings", JSON.stringify(updated));
+      } catch {}
+    }
+
+    try {
+      await db.ensureOpen();
       await db.settings.put({
         key: "app_settings",
         value: updated,
@@ -94,11 +114,12 @@ export default function SettingsPage() {
         title: "Đã lưu cài đặt",
         type: "success",
       });
-    } catch (e) {
-      console.error(e);
+    } catch (e: unknown) {
+      console.warn("IndexedDB warning, saved to localStorage:", e);
       toast({
-        title: "Lỗi lưu cài đặt",
-        type: "error",
+        title: "Đã lưu cài đặt",
+        description: "Cấu hình đã được ghi nhớ trên thiết bị",
+        type: "success",
       });
     }
   };

@@ -1,6 +1,7 @@
 import Dexie, { type Table } from "dexie";
 import { nanoid } from "nanoid";
 import { Transaction, Category, Settings, SyncJob } from "@/types/models";
+import { MenstrualCycleLog, MenstrualSettings } from "@/types/cycle";
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from "./constants";
 
 export interface SettingsRecord {
@@ -13,6 +14,8 @@ export class PersonalFinanceDB extends Dexie {
   categories!: Table<Category, string>;
   settings!: Table<SettingsRecord, string>;
   syncQueue!: Table<SyncJob, number>;
+  cycleLogs!: Table<MenstrualCycleLog, string>;
+  menstrualSettings!: Table<MenstrualSettings, string>;
 
   constructor() {
     super("ChiTieuDB");
@@ -21,6 +24,10 @@ export class PersonalFinanceDB extends Dexie {
       categories: "id, name, type, group",
       settings: "key",
       syncQueue: "++id, type, monthKey, status, createdAt",
+    });
+    this.version(2).stores({
+      cycleLogs: "id, startDate, endDate, createdAt",
+      menstrualSettings: "key",
     });
   }
 
@@ -197,6 +204,96 @@ export class PersonalFinanceDB extends Dexie {
     } catch {
       return [];
     }
+  }
+
+  // --- Menstrual Cycle Methods ---
+  async getMenstrualSettings(): Promise<MenstrualSettings> {
+    await this.ensureOpen();
+    const existing = await this.menstrualSettings.get("menstrual_settings");
+    if (existing) return existing;
+    return {
+      key: "menstrual_settings",
+      cycleLength: 28,
+      periodLength: 5,
+      lutealPhase: 14,
+      setupCompleted: false,
+      goal: "track",
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  async saveMenstrualSettings(updates: Partial<MenstrualSettings>): Promise<MenstrualSettings> {
+    await this.ensureOpen();
+    const current = await this.getMenstrualSettings();
+    const updated: MenstrualSettings = {
+      ...current,
+      ...updates,
+      key: "menstrual_settings",
+      updatedAt: new Date().toISOString(),
+    };
+    await this.menstrualSettings.put(updated);
+    return updated;
+  }
+
+  async logNewPeriod(
+    startDate: string,
+    options?: { periodDays?: number; notes?: string }
+  ): Promise<MenstrualCycleLog> {
+    await this.ensureOpen();
+    const now = new Date().toISOString();
+
+    // Check if a log already exists on this exact date
+    const existing = await this.cycleLogs.where("startDate").equals(startDate).first();
+    if (existing) {
+      const updated: MenstrualCycleLog = {
+        ...existing,
+        periodDays: options?.periodDays ?? existing.periodDays,
+        notes: options?.notes !== undefined ? options.notes : existing.notes,
+        updatedAt: now,
+      };
+      await this.cycleLogs.put(updated);
+      return updated;
+    }
+
+    const newLog: MenstrualCycleLog = {
+      id: nanoid(),
+      startDate,
+      periodDays: options?.periodDays ?? 5,
+      notes: options?.notes || "",
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await this.cycleLogs.add(newLog);
+
+    // Update settings if this is first setup or mark setupCompleted true
+    const currentSettings = await this.getMenstrualSettings();
+    if (!currentSettings.setupCompleted) {
+      await this.saveMenstrualSettings({ setupCompleted: true });
+    }
+
+    return newLog;
+  }
+
+  async updatePeriodLog(id: string, updates: Partial<MenstrualCycleLog>): Promise<void> {
+    await this.ensureOpen();
+    const existing = await this.cycleLogs.get(id);
+    if (!existing) return;
+    await this.cycleLogs.update(id, {
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  async deletePeriodLog(id: string): Promise<void> {
+    await this.ensureOpen();
+    await this.cycleLogs.delete(id);
+  }
+
+  async getAllPeriodLogs(): Promise<MenstrualCycleLog[]> {
+    await this.ensureOpen();
+    const logs = await this.cycleLogs.toArray();
+    return logs.sort((a, b) => b.startDate.localeCompare(a.startDate));
   }
 }
 

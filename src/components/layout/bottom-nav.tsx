@@ -3,12 +3,13 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ReceiptText, BarChart3, Tags, Settings } from "lucide-react";
+import { LayoutDashboard, ReceiptText, BarChart3, Tags, Settings, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/", label: "Tổng quan", icon: LayoutDashboard },
   { href: "/transactions", label: "Sổ GD", icon: ReceiptText },
+  { href: "/cycle", label: "Chu kỳ", icon: Heart },
   { href: "/analytics", label: "Phân tích", icon: BarChart3 },
   { href: "/categories", label: "Hạng mục", icon: Tags },
   { href: "/settings", label: "Cài đặt", icon: Settings },
@@ -33,14 +34,19 @@ export function BottomNav() {
               className={cn(
                 "flex flex-col items-center justify-center flex-1 h-full py-1 text-xs font-medium transition-colors select-none",
                 isActive
-                  ? "text-emerald-600 dark:text-emerald-400 font-semibold"
+                  ? item.href === "/cycle"
+                    ? "text-rose-600 dark:text-rose-400 font-semibold"
+                    : "text-emerald-600 dark:text-emerald-400 font-semibold"
                   : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
               )}
             >
               <div
                 className={cn(
                   "p-1 rounded-xl transition-all",
-                  isActive && "bg-emerald-50 dark:bg-emerald-950/50"
+                  isActive &&
+                    (item.href === "/cycle"
+                      ? "bg-rose-50 dark:bg-rose-950/50"
+                      : "bg-emerald-50 dark:bg-emerald-950/50")
                 )}
               >
                 <Icon className={cn("w-5 h-5", isActive ? "stroke-[2.2]" : "stroke-[1.7]")} />

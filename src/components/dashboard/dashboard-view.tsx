@@ -14,6 +14,7 @@ import {
   PiggyBank,
   ChevronLeft,
 } from "lucide-react";
+import { CycleDashboardWidget } from "@/components/cycle/cycle-dashboard-widget";
 
 export function DashboardView() {
   const [selectedMonth, setSelectedMonth] = React.useState<string>(() => {
@@ -158,6 +159,9 @@ export function DashboardView() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Menstrual Cycle & Fertility Widget */}
+      <CycleDashboardWidget />
 
       {/* Recent Transactions Section */}
       <div className="space-y-2 pt-1">
